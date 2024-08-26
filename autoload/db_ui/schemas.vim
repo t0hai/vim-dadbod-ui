@@ -158,18 +158,24 @@ if get(g:, 'dbext_default_ORA_bin', '') == 'sql'
   let s:oracle.parse_virtual_results = {results, min_len -> s:results_parser(s:strip_quotes(results[3:]), ',', min_len)}
 endif
 
-if !exists('g:db_adapter_bigquery_region')
-  let g:db_adapter_bigquery_region = 'region-us'
-endif
+let s:bigquery_schemas_query = "
+      \ SELECT schema_name FROM INFORMATION_SCHEMA.SCHEMATA"
 
-let s:bigquery_schemas_query = printf("
-      \ SELECT schema_name FROM `%s`.INFORMATION_SCHEMA.SCHEMATA
-      \ ", g:db_adapter_bigquery_region)
-
-let s:bigquery_schema_tables_query = printf("
-      \ SELECT table_schema, table_name
-      \ FROM `%s`.INFORMATION_SCHEMA.TABLES
-      \ ", g:db_adapter_bigquery_region)
+let s:bigquery_schema_tables_query = "
+      \ DECLARE db_schemas ARRAY<STRING>;
+      \ DECLARE query STRING;
+      \ SET db_schemas = (
+      \   SELECT ARRAY_AGG(schema_name) FROM INFORMATION_SCHEMA.SCHEMATA
+      \ );
+      \ SET query = (
+      \   SELECT
+      \     STRING_AGG(CONCAT(
+      \       \"SELECT table_schema, table_name FROM `\"
+      \       ,schema_names,\".INFORMATION_SCHEMA.TABLES`\"
+      \     ), \" UNION ALL \")
+      \   FROM UNNEST(db_schemas) AS schema_names
+      \ );
+      \ EXECUTE IMMEDIATE query;"
 
 let s:bigquery = {
       \ 'callable': 'filter',
